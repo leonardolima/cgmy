@@ -36,31 +36,39 @@ def poisson_process(N, l):
 
     return P
 
+##                        
+## 1. generate partitions
+##
+
 # e: epsilon
 # R: left and right limits, [-R, e] and [e, R]
 # D: total number of points considered, k = D/2
 def LS_CGMY(e, R, D):
-    LS1 = np.linspace(-R, -e, D/2)       # create an evenly spaced vector in [-R, e]
-                                         # with D/2 elements
-    LS2 = np.linspace(e, R, D/2)         # create an evenly spaced vector in [e, R]
-                                         # with D/2 elements
-    return (LS1, LS2)                    # return concatenation of the two vectors
+    LS1 = np.linspace(-R, -e, D/2)         # create an evenly spaced vector in [-R, e]
+                                           # with D/2 elements
+    LS2 = np.linspace(e, R, D/2)           # create an evenly spaced vector in [e, R]
+                                           # with D/2 elements
+    return (LS1, LS2)                      # return concatenation of the two vectors
+
+##                        
+## 2. compute \lambda_i's
+##
 
 # computes the Lévy measure of the CGMY process when x < 0
 # interval corresponds to the tuple [a_{i-1}, a_i)
 def v_CGMY_neg(C, G, M, Y, interval):
-    result, err = integrate.quad(lambda x:  C*np.exp(G*x)*(-x**(-1-Y)), interval[0], interval[1])
+    result, _ = integrate.quad(lambda x:  C*np.exp(G*x)*(-x**(-1-Y)), interval[0], interval[1])
     return result
 
 # computes the Lévy measure of the CGMY process when x > 0
 # interval corresponds to the tuple [a_i, a_{i+1})
 def v_CGMY_pos(C, G, M, Y, interval):
-    result, err = integrate.quad(lambda x:  C*np.exp(-M*x)*(x**(-1-Y)), interval[0], interval[1])
+    result, _ = integrate.quad(lambda x:  C*np.exp(-M*x)*(x**(-1-Y)), interval[0], interval[1])
     return result
 
 def compute_lambdas(C, G, M, Y, LS):
-    neg_partitions = LS[0]               # partitions where x < 0
-    pos_partitions = LS[1]               # partitions where x > 0
+    neg_partitions = LS[0]                 # partitions where x < 0
+    pos_partitions = LS[1]                 # partitions where x > 0
 
     neg_lambdas = []
     pos_lambdas = []
@@ -73,26 +81,51 @@ def compute_lambdas(C, G, M, Y, LS):
 
     return (np.array(neg_lambdas), np.array(pos_lambdas))
 
-# CGMY Lévy density 
-# def k_CGMY(C, G, M, Y, LS):
-#     ls1 = LS[LS < 0]                     # select all elements from LS s.t. < 0
-#     ls2 = LS[LS == 0]                    # select all elements from LS s.t. == 0
-#     ls3 = LS[LS > 0]                     # select all elements from LS > 0
+##                        
+## 3. compute c_i's
+##
 
-#     # Implementation of equation (7) of the paper
-#     for i in range(0, len(ls1)):
-#         ls1[i] = C*(math.exp(-G*abs(ls1[i]))/(abs(ls1[i])**(1+Y))) # LS < 0
+def compute_c_neg(C, G, M, Y, interval):
+    result, _ = integrate.quad(lambda x: (x**2)*C*np.exp(G*x)*(-x**(-1-Y)), interval[0], interval[1])
+    return result
 
-#     for i in range(0, len(ls3)):
-#         ls3[i] = C*(math.exp(-M*abs(ls3[i]))/(abs(ls3[i])**(1+Y))) # LS > 0
+def compute_c_pos(C, G, M, Y, interval):
+    result, _ = integrate.quad(lambda x: (x**2)*C*np.exp(-M*x)*(x**(-1-Y)), interval[0], interval[1])
+    return result
 
-#     return [ls1, ls2, ls3]
+def compute_cs(C, G, M, Y, LS, neg_lambdas, pos_lambdas):
+    neg_partitions = LS[0]               # partitions where x < 0
+    pos_partitions = LS[1]               # partitions where x > 0
+
+    neg_cs = []
+    pos_cs = []
+
+    for i in range(0, len(neg_partitions)-1):
+        neg_cs.append(math.sqrt((1./neg_lambdas[i])*compute_c_neg(C, G, M, Y, (neg_partitions[i], neg_partitions[i+1]))))
+
+    for i in range(0, len(pos_partitions)-1):
+        pos_cs.append(math.sqrt((1./pos_lambdas[i])*compute_c_pos(C, G, M, Y, (pos_partitions[i], pos_partitions[i+1]))))
+
+    return (np.array(neg_cs), np.array(pos_cs))
+
+##                        
+## 3. compute \sigma^2(\epsilon)
+##
+
+def compute_sigma_squared(C, G, M, Y, epsilon):
+    neg_result, _ = integrate.quad(lambda x: (x**2)*C*np.exp(G*x)*(-x**(-1-Y)), -epsilon, 0)
+    pos_result, _ = integrate.quad(lambda x: (x**2)*C*np.exp(-M*x)*(x**(-1-Y)), 0, epsilon) 
+    return neg_result + pos_result
+
+##                        
+## 4. simulate trajectories
+##
     
 # def CGMY(C, G, M, Y, LS):
-    # jumps smaller than epsilon
-    # B = brownianMotion(N)
-    # sigma = 2*(ep**2)*
-    # jumps larger than epsilon
+#     # jumps smaller than epsilon
+#     B = brownianMotion(N)
+#     sigma = 2*(ep**2)*
+#     # jumps larger than epsilon
 
 def main():
     np.random.seed(2019)  # set seed
@@ -107,9 +140,8 @@ def main():
 
     LS = LS_CGMY(epsilon, R, D)
     lambdas = compute_lambdas(C, G, M, Y, LS)
-    print(lambdas)
-    
-    
+    cs = compute_cs(C, G, M, Y, LS, lambdas[0], lambdas[1])
+    sigma_squared = compute_sigma_squared(C, G, M, Y, epsilon)
 
 if __name__ == "__main__":
     main()

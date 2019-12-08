@@ -14,30 +14,33 @@ def brownian_motion(D):
     B = np.insert(B, 0, 0)                 # insert 0 element at the beginning of vector
     return B
 
-def poisson_process(D, l):
-    dt = 1./D                              # compute time step
-    exp = np.random.exponential(1./l, D)   # generate D random samples from Exp(1/l)
-    exp = np.cumsum(exp)                   # sum them cumulatively
-    exp = np.insert(exp[:-1], 0, 0)        # insert 0 element at the beginning of vector
-                                           # and suppress last element
-    P = np.zeros(D)                        # start with P = [0, ..., 0]
-    # [0,1] here might be wrong though
-    LS = np.linspace(0, 1, num=D)          # create an evenly spaced vector in [0, 1]
-                                           # with D elements
+# def poisson_process(D, l):    
+#     dt = 1./D                              # compute time step
+#     exp = np.random.exponential(1./l, D)   # generate D random samples from Exp(1/l)
+#     exp = np.cumsum(exp)                   # sum them cumulatively
+#     exp = np.insert(exp[:-1], 0, 0)        # insert 0 element at the beginning of vector
+#                                            # and suppress last element
+#     N = np.zeros(D)                        # start with N = [0, ..., 0]
+#     # [0,1] here might be wrong though
+#     LS = np.linspace(0, 1, num=D)          # create an evenly spaced vector in [0, 1]
+#                                            # with D elements
 
-    last_sup_index = 0                     # keep the index of last supremum
-    for i in range(1, D):                  # iterate over P on [1, ..., D]
-        for j in range(last_sup_index, D): # iterate over exp on [lastSupIndex, ..., D]
-            if exp[j] > LS[i]*dt:          # check if already reached supremum
-                if j != 0:                 # if yes and j != 0, the supremum is j-1
-                    P[i] = j-1
-                    last_sup_index = j-1
-                    break
+#     # print("Lambda = " + str(l))
+#     # print("exp = " + str(exp))
+#     # print("LS = " + str(LS))
 
-                if j == 0:                 # special case when j == 0
-                    P[i] = 0
+#     last_supremum = 0
+#     for i in range(1, D): # i is for N[i]
+#         satisfy_condition = []
+#         for j in range(0, D): # j is for exp[j]
+#             if exp[j] <= LS[i]*dt:
+#                 satisfy_condition.append(j)
+                
+#         N[i] = max(satisfy_condition)
+#         last_supremum = N[i]
 
-    return P
+#     # print(N)
+#     return N
 
 ##                        
 ## 1. generate partitions
@@ -58,13 +61,13 @@ def LS_CGMY(e, R, D):
 # computes the Lévy measure of the CGMY process when x < 0
 # interval corresponds to the tuple [a_{i-1}, a_i)
 def v_CGMY_neg(C, G, M, Y, interval):
-    result, _ = integrate.quad(lambda x:  C*np.exp(G*x)*(-x**(-1-Y)), interval[0], interval[1])
+    result, _ = integrate.quad(lambda x: C*np.exp(G*x)*(-x**(-1-Y)), interval[0], interval[1])
     return result
 
 # computes the Lévy measure of the CGMY process when x > 0
 # interval corresponds to the tuple [a_i, a_{i+1})
 def v_CGMY_pos(C, G, M, Y, interval):
-    result, _ = integrate.quad(lambda x:  C*np.exp(-M*x)*(x**(-1-Y)), interval[0], interval[1])
+    result, _ = integrate.quad(lambda x: C*np.exp(-M*x)*(x**(-1-Y)), interval[0], interval[1])
     return result
 
 def compute_lambdas(C, G, M, Y, LS):
@@ -82,7 +85,7 @@ def compute_lambdas(C, G, M, Y, LS):
 
     return (np.array(neg_lambdas), np.array(pos_lambdas))
 
-##                        
+##
 ## 3. compute c_i's
 ##
 def compute_c_neg(C, G, M, Y, interval):
@@ -127,6 +130,15 @@ def CGMY(C, G, M, Y, gamma, sigma_squared, epsilon, R, D):
     neg_lambdas, pos_lambdas = compute_lambdas(C, G, M, Y, LS)
     neg_cs, pos_cs = compute_cs(C, G, M, Y, LS, neg_lambdas, pos_lambdas)
 
+    print("LS = ")
+    print(LS)
+    print("Lambda_is = ")
+    print(neg_lambdas)
+    print(pos_lambdas)
+    print("C_is = ")
+    print(neg_cs)
+    print(pos_cs)
+
     # jumps smaller than epsilon
     B = brownian_motion(D)
 
@@ -137,81 +149,90 @@ def CGMY(C, G, M, Y, gamma, sigma_squared, epsilon, R, D):
 
     # reminder: each p is a np.array
     for i in range(0, K):
-        p = poisson_process(D, neg_lambdas[i])
+        # p = poisson_process(D, neg_lambdas[i])
+        p = np.cumsum(np.random.poisson(neg_lambdas[i], K))
         neg_ps.append(p)
 
     for i in range(0, K):
-        p = poisson_process(D, pos_lambdas[i])
+        # p = poisson_process(D, pos_lambdas[i])
+        p = np.cumsum(np.random.poisson(pos_lambdas[i], K))
         pos_ps.append(p)
 
     sigma_til = math.sqrt(sigma_squared + compute_sigma_squared_f(C, G, M, Y, epsilon))
 
     # finally computing trajectories
-    neg_X = np.zeros(K)
-    pos_X = np.zeros(K)
+    X = np.zeros(D)
+    small_jumps = np.zeros(D)
     big_jumps = np.zeros(D)
 
     # here we are assuming t = i (this might be wrong though)
 
     # for x < 0
     for i in range(0, K):
-        big_jumps[i] = neg_cs[i]*neg_ps[i][i]
-        if abs(neg_cs[i]) < 1:
-            big_jumps[i] -= neg_lambdas[i]*i
+        for j in range(0, K):
+            big_jumps[i] = neg_cs[j]*neg_ps[i][j]
+            # if abs(neg_cs[j]) < 1:
+            #     big_jumps[i] -= neg_lambdas[j]*i
 
     # for x > 0
     for i in range(0, K):
-        big_jumps[i+K] = pos_cs[i]*pos_ps[i][i]
-        if abs(pos_cs[i]) < 1:
-            big_jumps[i+K] -= pos_lambdas[i]*i
+        for j in range(0, K):
+            big_jumps[i+K] = pos_cs[j]*pos_ps[i][j]
+            # if abs(pos_cs[j]) < 1:
+            #     big_jumps[i+K] -= pos_lambdas[j]*i
 
-    print(big_jumps)
-
-    # negative trajectories
+    # trajectories when x < 0
     for i in range(0, K):
-        neg_X[i] = gamma*i + sigma_til*B[i] + big_jumps[i]
+        X[i] = gamma*i + sigma_til*B[i] + big_jumps[i]
+        small_jumps[i] = sigma_til*B[i]
 
-    # positive trajectories
+    # trajectories when x > 0
     for i in range(0, K):
-        pos_X[i] = gamma*(i+K) + sigma_til*B[i+K] + big_jumps[i+K]
+        X[i+K] = gamma*(i+K) + sigma_til*B[i+K] + big_jumps[i+K]
+        small_jumps[i+K] = sigma_til*B[i+K]        
 
-    return (neg_X, pos_X)
+    return (X, small_jumps, big_jumps)
 
-def plot(X):
+def plot(X, small_jumps, big_jumps):
 
     t = np.arange(len(X))
 
-    df = pd.DataFrame({'X': X, 't': t})
+    df = pd.DataFrame({'X': X, 't': t, 'sj': small_jumps, 'bj': big_jumps})
+
+    ax = plt.gca()
     
-    df.plot(kind='line', x='t', y='X')
+    df.plot(kind='line', x='t', y='sj', label='small jumps', ax=ax)
+    df.plot(kind='line', x='t', y='bj', label='big jumps', ax=ax)
+    df.plot(kind='line', x='t', y='X', label='X_t', ax=ax)
     
     plt.title('Simulation of X_t')
     plt.xlabel('t')
-    plt.ylabel('X_t')
+    plt.ylabel('Process')
     plt.show()
 
 def main():
-    np.random.seed(2019)  # set seed
+    np.random.seed(1)  # set seed
 
-    # C = 5
-    # G = 7
-    # M = 23
-    # Y = 0.5
+    C = 7
+    G = 20
+    M = 7
+    Y = 0.01
 
-    C = 3
-    G = 5
-    M = 2
-    Y = 0.5
-    D = 200
-    R = 50
+    # C = 21.34
+    # G = 49.78
+    # M = 48.40
+    # Y = 0.0037
+
+    D = 100
+    R = 0.01
     epsilon = 0.001
-    sigma_squared = 0.2**2
-    gamma = 0.01
+    sigma_squared = 0.5**2
+    gamma = 0.001
 
-    neg_X, pos_X = CGMY(C, G, M, Y, gamma, sigma_squared, epsilon, R, D)
+    X, small_jumps, big_jumps = CGMY(C, G, M, Y, gamma, sigma_squared, epsilon, R, D)
 
-    plot(neg_X+pos_X)
+    plot(X, small_jumps, big_jumps)
 
 if __name__ == "__main__":
     main()
-    
+

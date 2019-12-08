@@ -97,9 +97,17 @@ def compute_sigma_squared_f(C, G, M, Y, epsilon):
     return neg_result + pos_result
 
 ##                        
-## 5. simulate trajectories
+## 4. compute gamma
+##
+def compute_gamma(C, G, M, Y):
+    int1, _ = integrate.quad(lambda x: np.exp(-M*x)*(x**(-Y)), 0, 1)
+    int2, _ = integrate.quad(lambda x: np.exp(G*x)*(abs(x)**(-Y)), -1, 0)
+    return C*(int1-int2)
+
+##                        
+## 6. simulate trajectories
 ##    
-def CGMY(C, G, M, Y, gamma, sigma_squared, D, alpha):
+def CGMY(C, G, M, Y, sigma_squared, D, alpha):
     
     K = int(D/2)
     LS = LS_CGMY(alpha, D)
@@ -133,6 +141,7 @@ def CGMY(C, G, M, Y, gamma, sigma_squared, D, alpha):
     
     epsilon = pos_partitions[0]
     sigma_til = math.sqrt(sigma_squared + compute_sigma_squared_f(C, G, M, Y, epsilon))
+    gamma = compute_gamma(C, G, M, Y)
 
     # finally computing trajectories
     neg_X = np.zeros(K)
@@ -209,10 +218,9 @@ def main():
 
     D = 200
     sigma_squared = 0.5**2
-    gamma = 2
     alpha = 0.2
 
-    X, small_jumps, big_jumps = CGMY(C, G, M, Y, gamma, sigma_squared, D, alpha)
+    X, small_jumps, big_jumps = CGMY(C, G, M, Y, sigma_squared, D, alpha)
 
     plot(X, small_jumps, big_jumps)
 

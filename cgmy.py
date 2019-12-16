@@ -1,6 +1,7 @@
 #!/usr/bin python
 
 from scipy.stats import norm, gamma
+from scipy.ndimage.filters import gaussian_filter1d
 import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.integrate as integrate
@@ -234,6 +235,43 @@ def option_pricing(C, G, M, Y, D, sigma_squared, alpha, r, q, strike_prices, clo
         print("Closing price = " + str(closing_prices[i]))
         print("RMSE = " + str(rmse))
 
+##                        
+## 10. compute option price (exotic barrier)
+##
+def option_pricing_exotic_barrier(C, G, M, Y, D, sigma_squared, alpha, r, q, S0, N, H):
+    
+    m_new = r - q - C*gamma.rvs(Y)*(((M-1)**Y)-(M**Y)+((G+1)**Y)-(G**Y))
+    T = 1
+
+    counter = 0
+    option_prices = 0
+
+    S_t = np.zeros(D)
+    S_T = np.zeros(N)
+    maximums = np.zeros(N)
+
+    for i in range(0, N):
+        X, _, _ = CGMY(C, G, M, Y, sigma_squared, D, alpha)
+        for j in range (0, D):
+            S_t[j] = S0*np.exp(m_new*(j/250) + X[j])
+
+        maximums[i] = np.max(S_t)
+        S_T[i] = S_t[-1]
+
+    for i in range(0, N):
+        if maximums[i] >= H:
+            counter += 1
+
+    p = counter/N
+
+    for i in range(0, N):
+        option_price = np.exp(-r*T)*max(S_T[i] - S0, 0)
+        option_prices += option_price
+    
+    print("----------------------------")
+    print("Probability of reaching barrier = " + str(counter/N))
+    print("Option price = " + str(p*(option_prices/N)))
+
 def plot(X, small_jumps, big_jumps):
 
     t = np.arange(len(X))
@@ -267,10 +305,28 @@ def plot_option_prices():
     plt.xlabel('K')
     plt.ylabel('Option price')
     plt.show()
+
+
+def plot_implied_volatilities():
+    strike_prices = [975, 1025, 1075, 1125, 1175, 1225, 1275]
+    implied_volatilities = [0.200313, 0.174848, 0.199152, 0.224290, 0.255366, 0.339690, 0.347470]
+
+    ysmoothed = gaussian_filter1d(implied_volatilities, sigma=2)
+
+    df = pd.DataFrame({'K': strike_prices, 'iv': implied_volatilities, 'ys': ysmoothed})
+
+    ax = plt.gca()
+
+    df.plot(kind='line', x='K', y='ys', label='Strike price', ax=ax)
     
+    ax.set_ylim(bottom=0)
+    plt.title('S&P 500 Call Option Implied Volatilities')
+    plt.xlabel('K')
+    plt.ylabel('Implied volatilities')
+    plt.show()
 
 def main():
-    # np.random.seed(2019)  # set seed
+    # np.random.seed(1)  # set seed
 
     # C = 7
     # G = 20
@@ -278,15 +334,15 @@ def main():
     # Y = 0.5
 
     # Plot random trajectories
-    C = 21.34
-    G = 49.78
-    M = 48.40
-    Y = 0.0037
-    D = 400
-    sigma_squared = 0.5**2
-    alpha = 0.2
-    X, small_jumps, big_jumps = CGMY(C, G, M, Y, sigma_squared, D, alpha)
-    plot(X, small_jumps, big_jumps)
+    # C = 21.34
+    # G = 49.78
+    # M = 48.40
+    # Y = 0.0037
+    # D = 400
+    # sigma_squared = 0.5**2
+    # alpha = 0.2
+    # X, small_jumps, big_jumps = CGMY(C, G, M, Y, sigma_squared, D, alpha)
+    # plot(X, small_jumps, big_jumps)
 
     # data from Schoutens (Levy Processes in Finance: Pricing Financial Derivatives)
     # C = 0.0244
@@ -304,7 +360,22 @@ def main():
     # S0 = 1124.47
     # option_pricing(C, G, M, Y, D, sigma_squared, alpha, r, q, strike_prices, closing_prices, S0, N)
 
+    # C = 0.0244
+    # G = 0.0765
+    # M = 30.7515
+    # Y = 0.5
+    # D = 20
+    # sigma_squared = 0.0001**2
+    # alpha = 0.2
+    # r = 0.019
+    # q = 0.012
+    # N = 10000
+    # S0 = 1124.47
+    # H = 1.1*1124.47
+    # option_pricing_exotic_barrier(C, G, M, Y, D, sigma_squared, alpha, r, q, S0, N, H)
+
     # plot_option_prices()
+    plot_implied_volatilities()
 
 if __name__ == "__main__":
     main()
